@@ -9,15 +9,15 @@ import io
 
 app = FastAPI()
 
-# Configure Gemini
+# Configure Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    raise RuntimeError("Missing GEMINI_API_KEY environment variable")
+    raise RuntimeError("GEMINI_API_KEY environment variable not set.")
 genai.configure(api_key=GEMINI_API_KEY)
 
 class QuestionRequest(BaseModel):
     question: str
-    image: Optional[str] = None  # base64-encoded image
+    image: Optional[str] = None  # base64-encoded PNG/JPEG
 
 class Link(BaseModel):
     url: str
@@ -27,20 +27,20 @@ class TAResponse(BaseModel):
     answer: str
     links: List[Link]
 
-def decode_image(base64_str: str):
+def decode_image(base64_str):
     try:
-        if "," in base64_str:  # Remove data:image/... header if present
+        # Remove data:image/...;base64, if present
+        if "," in base64_str:
             base64_str = base64_str.split(",")[1]
-        image_data = base64.b64decode(base64_str)
-        return Image.open(io.BytesIO(image_data))
+        image_bytes = base64.b64decode(base64_str)
+        return Image.open(io.BytesIO(image_bytes))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid image data: {e}")
 
 @app.post("/api/", response_model=TAResponse)
 async def answer_question(request: QuestionRequest):
     try:
-        model = genai.GenerativeModel('gemini-pro-vision')
-        
+        model = genai.GenerativeModel('gemini-1.5-flash')  # Updated model name
         # Prepare content
         contents = []
         if request.image:
@@ -52,19 +52,15 @@ async def answer_question(request: QuestionRequest):
         response = model.generate_content(contents)
         answer = response.text
 
-        # Dummy links (replace with your database logic)
+        # Dummy links logic (replace with your own DB search if needed)
         links = []
         if "assignment" in request.question.lower():
-            links.append(Link(
-                url="https://discourse.onlinedegree.iitm.ac.in/t/tds-assignment-is-not-submitting/166189/1",
-                text="TDS Assignment Submission Thread"
-            ))
+            links.append(Link(url="https://example.com/assignment", text="Assignment Help"))
 
-        return TAResponse(answer=answer, links=links)
-    
+        return {"answer": answer, "links": [link.dict() for link in links]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
-def health_check():
-    return {"status": "OK"}
+def root():
+    return {"message": "Virtual TA API is live!"}
