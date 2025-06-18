@@ -1,21 +1,23 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from openai import OpenAI
 import os
-import sqlite3
-import json
+import google.generativeai as genai
+from PIL import Image
+import base64
+import io
 
 app = FastAPI()
 
-client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("OPENAI_BASE_URL")
-)
+# Configure Gemini
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError("Missing GEMINI_API_KEY environment variable")
+genai.configure(api_key=GEMINI_API_KEY)
 
 class QuestionRequest(BaseModel):
     question: str
-    image: Optional[str] = None
+    image: Optional[str] = None  # base64-encoded image
 
 class Link(BaseModel):
     url: str
@@ -25,46 +27,44 @@ class TAResponse(BaseModel):
     answer: str
     links: List[Link]
 
-def get_relevant_links(question: str, top_k: int = 2):
-    db_path = "data/tds_content.db"
-    if not os.path.exists(db_path):
-        return []
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    # Simple keyword search in topic_title/content
-    cursor.execute(
-        "SELECT url, topic_title FROM discourse_posts WHERE content LIKE ? OR topic_title LIKE ? LIMIT ?",
-        (f"%{question}%", f"%{question}%", top_k)
-    )
-    results = cursor.fetchall()
-    conn.close()
-    return [Link(url=row[0], text=row[1]) for row in results]
+def decode_image(base64_str: str):
+    try:
+        if "," in base64_str:  # Remove data:image/... header if present
+            base64_str = base64_str.split(",")[1]
+        image_data = base64.b64decode(base64_str)
+        return Image.open(io.BytesIO(image_data))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
 
 @app.post("/api/", response_model=TAResponse)
 async def answer_question(request: QuestionRequest):
     try:
-        # Build the multimodal message content for OpenAI
-        content = [
-            {"type": "text", "text": f"You are a TA for IITM's Tools in Data Science. Question: {request.question}"}
-        ]
+        model = genai.GenerativeModel('gemini-pro-vision')
+        
+        # Prepare content
+        contents = []
         if request.image:
-            content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/png;base64,{request.image}",
-                    "detail": "auto"
-                }
-            })
+            image = decode_image(request.image)
+            contents.append(image)
+        contents.append(request.question)
 
-        response = client.chat.completions.create(
-            model="gpt-4o",  # Use gpt-4o for multimodal support
-            messages=[{"role": "user", "content": content}],
-            temperature=0.7,
-            max_tokens=500
-        )
-        answer = response.choices[0].message.content
+        # Generate response
+        response = model.generate_content(contents)
+        answer = response.text
 
-        links = get_relevant_links(request.question)
-        return {"answer": answer, "links": [link.dict() for link in links]}
+        # Dummy links (replace with your database logic)
+        links = []
+        if "assignment" in request.question.lower():
+            links.append(Link(
+                url="https://discourse.onlinedegree.iitm.ac.in/t/tds-assignment-is-not-submitting/166189/1",
+                text="TDS Assignment Submission Thread"
+            ))
+
+        return TAResponse(answer=answer, links=links)
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/")
+def health_check():
+    return {"status": "OK"}
