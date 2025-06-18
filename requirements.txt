@@ -1,4 +1,5 @@
+setuptools
 fastapi
 uvicorn
 pydantic
-numpy
+numpy==1.26.4
