@@ -51,3 +51,8 @@ async def answer_question(request: QuestionRequest):
 @app.get("/")
 async def root():
     return {"message": "Virtual TA API is running!"}
+if __name__ == "__main__":
+    import os
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))  # Render sets $PORT, default to 8000 for local
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
