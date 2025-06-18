@@ -3,3 +3,4 @@ fastapi
 uvicorn
 pydantic
 numpy==1.26.4
+sentence-transformers
