@@ -18,3 +18,7 @@ A FastAPI-based virtual teaching assistant for IITM's Tools in Data Science cour
 ## Deployment
 
 This project is ready for deployment on Vercel.
+
+## Environment Variables
+
+Set your API keys (e.g., GOOGLE_API_KEY) in the Vercel dashboard under Project Settings > Environment Variables.

@@ -1,4 +1,9 @@
+__pycache__/
+.venv/
 venv/
+.env
 *.db
-venv/
-venv/
+*.sqlite3
+data/
+virtualta.db
+bfg-1.14.0.jar
